@@ -1,0 +1,42 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "resources": [
+        {
+            "name": "mynetwork-2",
+            "type": "Microsoft.Network/virtualNetworks",
+            "location": "East US",
+            "apiVersion": "2015-06-15",
+            "tags": {
+                "displayName": "mynetwork-2"
+            },
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('mynetwork-2Prefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('mynetwork-2Subnet1Name')]",
+                        "properties": {
+                            "addressPrefix": "[variables('mynetwork-2Subnet1Prefix')]"
+                        }
+                    }
+                 
+                  
+                ]
+            }
+        }
+    ],
+    "variables": {
+        "mynetwork-2Prefix": "10.2.0.0/16",
+        "mynetwork-2Subnet1Name": "Subnet-1",
+        "mynetwork-2Subnet1Prefix": "10.2.1.0/24"
+      
+    }
+}
+
+          
+ 
