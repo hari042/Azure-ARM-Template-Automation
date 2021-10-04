@@ -1,0 +1,1006 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+
+        "hostpoolName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the Hostpool to be created."
+            },
+            "defaultValue": "hostpool-6"
+        },
+        "validationEnvironment": {
+            "type": "bool",
+            "metadata": {
+                "description": "Whether to use validation enviroment."
+            },
+            "defaultValue": false //true if validation required 
+        },
+        "hostpoolType": {
+            "type": "string",
+            "allowedValues": [
+                "Personal", //hostpoolshould be pooled or personal
+                "Pooled"
+            ],
+            "metadata": {
+                "description": "Set this parameter to Personal if you would like to enable Persistent Desktop experience. Defaults to false."
+            },
+            "defaultValue": "Personal"
+        },
+        "personalDesktopAssignmentType": {
+            "type": "string",
+            "allowedValues": [
+                "Automatic", //if hostpoolType is  personal
+                "Direct", ////if hostpoolType is  personal
+                "" //if hostpoolType is  pooled
+            ],
+            "metadata": {
+                "description": "Set the type of assignment for a Personal hostpool type"
+            },
+            "defaultValue": "Automatic"
+        },
+        "maxSessionLimit": {
+            "type": "int",
+            "metadata": {
+                "description": "Maximum number of sessions." //only if hostpoolType is pooled then set no of user per session
+            },
+            "defaultValue": 1
+        },
+        "loadBalancerType": {
+            "type": "string",
+            "allowedValues": [
+                "BreadthFirst", //if hostpoolType is  pooled
+                "DepthFirst", //if hostpoolType is  pooled
+                "Persistent" //if hostpoolType is  personal
+            ],
+            "metadata": {
+                "description": "Type of load balancer algorithm."
+            },
+            "defaultValue": "Persistent"
+        },
+        //VM inputs   
+        "vmNamePrefix": {
+            "type": "string",
+            "metadata": {
+                "description": "This prefix will be used in combination with the VM number to create the VM name. If using 'rdsh' as the prefix, VMs would be named 'rdsh-0', 'rdsh-1', etc. You should use a unique prefix to reduce name collisions in Active Directory."
+            },
+            "defaultValue": "wvd" // user input   //if user don't want to add vm ,then   vmNamePrefix value=""
+        },
+
+        "availabilityOption": {
+            "type": "string",
+            "metadata": {
+                "description": "Select the availability options for the VMs."
+            },
+            "defaultValue": "None",
+            "allowedValues": [
+                "None",
+                "AvailabilitySet",
+                "AvailabilityZone"
+            ]
+        },
+        "availabilityZone": {
+            "type": "int",
+            "metadata": {
+                "description": "The number of availability zone to be used when create the VMs." //if availabilityOption == AvailabilityZone
+            },
+            "defaultValue": 1,
+            "allowedValues": [
+                1,
+                2,
+                3
+            ]
+        },
+
+        //if availabilityset is required
+        "availabilitySetName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of avaiability set to be used when create the VMs." //if availabilityOption == AvailabilityZone
+            },
+            "defaultValue": "" //name of the availability set ,it can be existing availability set name  and it should be in same resource group of vm 
+        },                      
+        "createAvailabilitySet": {
+            "type": "bool",
+            "metadata": {
+                "description": "Whether to create a new availability set for the VMs."
+            },
+            "defaultValue": false //true if need to create new availabiltyset
+        },
+        "availabilitySetUpdateDomainCount": {
+            "type": "int",
+            "metadata": {
+                "description": "The platform update domain count of avaiability set to be created."
+            },
+            "defaultValue": 5,
+            "allowedValues": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20
+            ]
+        },
+        "availabilitySetFaultDomainCount": {
+            "type": "int",
+            "metadata": {
+                "description": "The platform fault domain count of avaiability set to be created."
+            },
+            "defaultValue": 2,
+            "allowedValues": [
+                1,
+                2,
+                3
+            ]
+        },
+
+        "vmImageType": {
+            "type": "string",
+            "metadata": {
+                "description": "Select the image source for the session host vms. VMs from a Gallery image will be created with Managed Disks."
+            },
+            "defaultValue": "Gallery",
+            "allowedValues": [ //user input
+                "CustomVHD", //not available if avilabilityZone is choosen
+                "CustomImage",
+                "Gallery"
+            ]
+        },
+        "vmSize": {
+            "type": "string",
+            "metadata": {
+                "description": "The size of the session host VMs."
+            },
+            "defaultValue": "Standard_B1s" // don't take user input //dev part
+        },
+        "vmImageReference": {
+            "type": "object",
+            "defaultValue": {    //provide vm properties accorditng to the vm image user select
+                "publisher": "microsoftwindowsdesktop",   
+                "offer": "Windows-10", 
+                "sku": "20h2-ent",
+                "version": "latest"
+            }
+        },
+        "vmNumberOfInstances": {
+            "type": "int",
+            "metadata": {
+                "description": "Number of session hosts that will be created and added to the hostpool."
+            },
+            "defaultValue": 1 // user input required ,  //if user don't want to add vm ,then   vmNumberOfInstances value is 0
+        },
+
+        "vmGalleryImageHasPlan": {
+            "type": "bool",
+            "metadata": {
+                "description": "Whether the VM has plan or not"
+            },
+            "defaultValue": false
+        },
+        "vmImageVhdUri": {
+            "type": "string",
+            "metadata": {
+                "description": "(Required when vmImageType = CustomVHD) URI of the sysprepped image vhd file to be used to create the session host VMs. For example, https://rdsstorage.blob.core.windows.net/vhds/sessionhostimage.vhd"
+            },
+            "defaultValue": ""
+        },
+        "vmCustomImageSourceId": {
+            "type": "string",
+            "metadata": {
+                "description": "(Required when vmImageType = CustomImage) Resource ID of the image"
+            },
+            "defaultValue": ""
+        },
+        "vmDiskType": {
+            "type": "string",
+            "allowedValues": [
+                "Premium_LRS", //userinput required
+                "StandardSSD_LRS",
+                "Standard_LRS"
+            ],
+            "metadata": {
+                "description": "The VM disk type for the VM: HDD or SSD."
+            },
+            "defaultValue": "StandardSSD_LRS"
+        },
+        "vmUseManagedDisks": {
+            "type": "bool",
+            "metadata": {
+                "description": "True indicating you would like to use managed disks or false indicating you would like to use unmanaged disks."
+            },
+            "defaultValue": true //itcan be false only if vmImageType ==custom
+        },
+        "storageAccountResourceGroupName": {
+            "type": "string",
+            "metadata": {
+                "description": "(Required when vmUseManagedDisks = False) The resource group containing the storage account of the image vhd file."
+            },
+            "defaultValue": ""
+        }, //vmUseManagedDisks if it is false provide storage account to manage
+        "bootDiagnostics": {
+            "type": "object",
+            "metadata": {
+                "description": "Boot diagnostics object taken as body of Diagnostics Profile in VM creation"
+            },
+            "defaultValue": {
+                "enabled": true,//values can be false if  bootDiagnostics not required
+                "storageUri":"" //"https://haristorag.blob.core.windows.net/"  //if user choose  bootDiagnostics='Enable with custom storage account'
+
+            }
+        },
+
+        //Network and security
+        "existingVnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the virtual network the VMs will be connected to."
+            },
+            "defaultValue": "VNET-TEST"   //if user don't want to add vm ,then  value can be ""
+        },
+        "existingSubnetName": {
+            "type": "string",
+            "metadata": {
+                "description": "The subnet the VMs will be placed in."
+            },
+            "defaultValue": "workgroup"  //if user don't want to add vm ,then  value can be ""
+        },
+        "virtualNetworkResourceGroupName": {
+            "type": "string",
+            "metadata": {
+                "description": "The resource group containing the existing virtual network."
+            },
+            "defaultValue": "RG-HUB" //if user don't want to add vm ,then  value can be ""
+        },
+        "networkSecurityGroup": {
+            "type": "string",
+            "metadata": {
+                "description": " "
+            },
+            "defaultValue": "none" //basic,none
+
+        },
+        "createNetworkSecurityGroup": {
+            "type": "bool",
+            "metadata": {
+                "description": "Whether to create a new network security group or use an existing one"
+            },
+            "defaultValue": false
+        },
+        "nsgResourceGroupName": {
+            "type": "string",
+            "metadata": {
+                "description": "The resource group name of an existing network security group"
+            },
+            "defaultValue": "RG-HUB" //value is " " if  existing network security group is not selected
+        },
+        "networkSecurityGroupName": {
+            "type": "string",
+            "metadata": {
+                "description": "The resource name of an existing network security group"
+            },
+            "defaultValue": ""  //value is " " if  existing network security group is not selected
+        },
+        "nsgRulesName": { //only if "createNetworkSecurityGroup" is true this option should provide
+            "type": "Array",
+            "metadata": {
+                "description": "The rules to be given to the new network security group"
+            },
+            "defaultValue": [
+                //RDP,
+                //SSH,
+                //HTTP,
+                //HTTPS
+
+            ]   //value is [] if  networkSecurityGroup value is none and advanced
+        },
+
+        //Domain to join
+        "aadJoin": {
+            "type": "bool",
+            "metadata": {
+                "description": " True if AAD Join, false if AD join"
+            },
+            "defaultValue": true
+        },
+        "intune": {
+            "type": "bool",
+            "metadata": {
+                "description": "True if intune enrollment is selected.  False otherwise"
+            },
+            "defaultValue": false
+        },  
+
+        //username for Adminaccount of domain if aadJoin is false
+        "administratorAccountUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "A username in the domain that has privileges to join the session hosts to the domain. For example, 'vmjoiner@contoso.com'."
+            },
+            "defaultValue": ""  //value is " " if user aadjoin is true
+        },
+        //passwordForAdminAccount of domain
+        "administratorAccountPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The password that corresponds to the existing domain username."
+            },
+            "defaultValue": "" //value is " " if user aadjoin is true
+        },
+        "domain": {
+            "type": "string",
+            "metadata": {
+                "description": "Domain to join"
+            },
+            "defaultValue": ""  // value is "" if user don't want to provide Organizational Unit path  and also value is " " if user aadjoin is true
+        },
+        "ouPath": {
+            "type": "string",
+            "metadata": {
+                "description": "OUPath for the domain join"
+            },
+            "defaultValue": ""  // value is "" if user don't want to provide Organizational Unit path  and also value is " " if user aadjoin is true
+        },
+
+
+        //Virtual Machine Administrator account
+        "vmAdministratorAccountUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "A username to be used as the virtual machine administrator account. The vmAdministratorAccountUsername and  vmAdministratorAccountPassword parameters must both be provided. Otherwise, domain administrator credentials provided by administratorAccountUsername and administratorAccountPassword will be used."
+            },
+            "defaultValue": "hari"  //value can be " "  if user don't want to create vm
+        },
+        "vmAdministratorAccountPassword": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The password associated with the virtual machine administrator account. The vmAdministratorAccountUsername and  vmAdministratorAccountPassword parameters must both be provided. Otherwise, domain administrator credentials provided by administratorAccountUsername and administratorAccountPassword will be used."
+            },
+            "defaultValue": "Admin12345678"  //value can be " "  if user don't want to create vm
+        },
+        "customConfigurationTemplateUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "Arm template that contains custom configurations to be run after the Virtual Machines are created."
+            },
+            "defaultValue": "" //this option is for Post update custom configuration ARM Template
+        },
+        "customConfigurationParameterUrl": {
+            "type": "string",
+            "metadata": {
+                "description": "Url to the Arm template parameter file for the customConfigurationTemplateUrl parameter. This input will be used when the template is ran after the VMs have been deployed."
+            },
+            "defaultValue": "" //this option is for Post update custom configuration ARM Template
+        },
+
+        //workspaceTab
+                
+        "addToWorkspace": {
+            "type": "bool",
+            "metadata": {
+                "description": "Whether to add applicationGroup to workspace."
+            },
+            "defaultValue": true
+        },
+        "workSpaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the workspace to be attach to new Applicaiton Group."
+            },
+            "defaultValue": "workspace-6" //value can be " "  if user don't want to add workspace
+        },
+
+        //workspaceResourceGroup
+        "workspaceResourceGroup": {
+            "type": "string",
+            "metadata": {
+                "description": "The workspace resource group Name."
+            },
+            "defaultValue": "RG-POOL" //ResourceGroup  name should be same as deployment ResourceeGroup ,it can be changed only if selecting existing workspace
+        },
+        //if it is a newWorkspace
+        "isNewWorkspace": {
+            "type": "bool",
+            "metadata": {
+                "description": "True if the workspace is new. False if there is no workspace added or adding to an existing workspace."
+            },
+            "defaultValue": true //true if it is new workspace
+        },
+        "existingAppGroupName": {
+            "type": "string",
+            "defaultValue": "" //application GroupName of existing workspaace //only if existing workspace is choosen
+        },
+
+
+
+        //Advanced option
+        //Choosing destination details to send logs to
+
+        "sendtologanalyticsworkspace": {
+            "type": "bool",
+            "metadata": {
+                "description": "Whether to add logAnalyticsWorkspace."
+            },
+            "defaultValue": true // false if not to send add logAnalyticsWorkspace
+        },
+        "logAnalyticsResourceGroup": {
+            "type": "string",
+            "metadata": {
+                "description": "ResourceGroup of a log Analytics Workspcae."
+            },
+            "defaultValue": "defaultresourcegroup-eus" //resourceGroup name of existing loganalyticsworkspace, value can be "" if  sendtologanalyticsworkspace is false
+        },
+        "logAnalyticsWorkspaceName": {
+            "type": "string",
+            "defaultValue": "defaultworkspace-4d319d8e-8866-4e36-86f7-559abad68987-eus" //existing workspace name need to be provided ,value can be "" if  sendtologanalyticsworkspace is false
+
+        },
+
+        "archieveToStorageAccount": {
+            "type": "bool",
+            "metadata": {
+                "description": "" // if true connect logs with storage account
+            },
+            "defaultValue": false
+        },
+        "storageAccountResourceGroup": {
+            "type": "string",
+            "defaultValue": "" // if archieveToStorageAccount true provide resourcegroupname of existing storage account ,value can be "" if   archieveToStorageAccount is false
+        },
+        "storageAccountName": {
+            "type": "string",
+            "defaultValue": "" // if archieveToStorageAccount true provide name of existing storage account     ,value can be "" if   archieveToStorageAccount is false
+        },
+
+        //eventhub
+        "streamToAnEventHub": {
+            "type": "bool",
+            "metadata": {
+                "description": ""
+            },
+            "defaultValue": false
+        },
+        "eventHubName": {
+            "type": "string",
+            "defaultValue": "" //name of the eventhub if  streamToAnEventHub is true
+        },
+        "hostpoolDiagnosticSettingsEventHubName": {
+            "type": "string",
+            "metadata": {
+                "description": "The event hub name to send logs to" //eventName of EventHub under Advanced Option.
+            },
+            "defaultValue": ""
+        },
+        "eventHubResourceGroup": {
+            "type": "string",
+            "defaultValue": "" //resource group of eventhub if  streamToAnEventHub is true
+        },
+
+        //tags
+        "tags": {
+            "type": "object",
+            "defaultValue": {}
+        },
+
+
+        "tokenExpirationTime": {
+            "type": "string",
+            "metadata": {
+                "description": "Hostpool token expiration time" // don't take user input //dev part
+            },
+            "defaultValue": "2021-09-15T10:35:49.195Z" //currentTime +25 days //dev part
+        },
+        "deploymentId": {
+            "type": "string",
+            "metadata": {
+                "description": "GUID for the deployment" // don't take user input //dev part
+            },
+            "defaultValue": "[utcNow()]"
+        }
+
+    },
+
+    "variables": {
+
+        "vmTemp": "", //"{\"domain\":\"dynapt.ai\",\"galleryImageOffer\":\"Windows-10\",\"galleryImagePublisher\":\"microsoftwindowsdesktop\",\"galleryImageSKU\":\"20h2-ent\",\"imageType\":\"Gallery\",\"imageUri\":null,\"customImageId\":null,\"namePrefix\":\"avd\",\"osDiskType\":\"StandardSSD_LRS\",\"useManagedDisks\":true,\"vmSize\":{\"id\":\"Standard_D2s_v3\",\"cores\":2,\"ram\":8},\"galleryItemId\":\"microsoftwindowsdesktop.windows-1020h2-ent\"}",
+       //for dev part/ please replace the  properties values with parameternames of  properties Values and  vmTemp  value should be provided only if aadjoin is false
+       
+        "nestedTemplatesLocation": "https://catalogartifact.azureedge.net/publicartifacts/Microsoft.Hostpool-ARM-1.8.0/",
+        "artifactsLocation": "https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_8-3-2021.zip",
+        "apiVersion": "2019-12-10-preview",
+        "hostpoolFriendlyName": "",
+        "hostpoolDescription": "",
+        "preferredAppGroupType": "Desktop",
+
+        "appGroupDiagnosticSettingsLogCategories": [
+            "Checkpoint",
+            "Error",
+            "Management"
+        ],
+        "workspaceDiagnosticSettingsLogCategories": [
+            "Checkpoint",
+            "Error",
+            "Management",
+            "Feed"
+        ],
+        "customRdpProperty": "",
+        "userAssignedIdentity": "",
+        "hostpoolDiagnosticSettingsLogCategories": [
+            "Checkpoint",
+            "Error",
+            "Management",
+            "Connection",
+            "HostRegistration",
+            "AgentHealthStatus"
+        ],
+
+        "allApplicationGroup": "[concat('/subscriptions/',subscription().subscriptionId,'/resourcegroups/',parameters('workspaceResourceGroup'),'/providers/Microsoft.DesktopVirtualization/applicationgroups/',parameters('existingAppGroupName'))]",
+        "allApplicationGroupReferences": "[if(parameters('isNewWorkspace'),'',variables('allApplicationGroup'))]",
+
+        "networkSecId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourcegroups/',parameters('nsgResourceGroupName'),'/providers/Microsoft.Network/networkSecurityGroups/',parameters('networkSecurityGroupName'))]",
+        "networkSecurityGroupId": "[if(equals(parameters('networkSecurityGroup'),'Advanced'),variables('networkSecId'),'')]",
+
+        "hostpoolDiagnosticSettingsEventHubAuthorizationId1": "[concat('/subscriptions/',subscription().subscriptionId,'/resourcegroups/',parameters('eventHubResourceGroup'),'/providers/Microsoft.EventHub/namespaces/',parameters('eventHubName'),'/authorizationRules/RootManageSharedAccessKey')]",
+        "hostpoolDiagnosticSettingsEventHubAuthorizationId": "[if(parameters('streamToAnEventHub'),variables('hostpoolDiagnosticSettingsEventHubAuthorizationId1'),'')]",
+
+
+        "hostpoolDiagnosticSettingsStorageAccount1": "[concat('/subscriptions/',subscription().subscriptionId,'/resourcegroups/',parameters('storageAccountResourceGroup'),'/providers/Microsoft.Storage/storageAccounts/',parameters('storageAccountName'))]",
+        "hostpoolDiagnosticSettingsStorageAccount": "[if(parameters('archieveToStorageAccount'),variables('hostpoolDiagnosticSettingsStorageAccount1'),json('null'))]",
+
+        "hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId1": "[concat('/subscriptions/',subscription().subscriptionId,'/resourcegroups/',parameters('logAnalyticsResourceGroup'),'/providers/microsoft.operationalinsights/workspaces/',parameters('logAnalyticsWorkspaceName'))]",
+        "hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId": "[if(parameters('sendtologanalyticsworkspace'),variables('hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId1'),json('null'))]",
+
+
+        "createVMs": "[greater(parameters('vmNumberOfInstances'),0)]",
+        "rdshManagedDisks": "[if(equals(parameters('vmImageType'), 'CustomVHD'), parameters('vmUseManagedDisks'), bool('true'))]",
+        "rdshPrefix": "[concat(parameters('vmNamePrefix'),'-')]",
+        "avSetSKU": "[if(variables('rdshManagedDisks'), 'Aligned', 'Classic')]",
+        "vhds": "[concat('vhds','/', variables('rdshPrefix'))]",
+        "subnet-id": "[resourceId(parameters('virtualNetworkResourceGroupName'),'Microsoft.Network/virtualNetworks/subnets',parameters('existingVnetName'), parameters('existingSubnetName'))]",
+        "hostpoolName": "[replace(parameters('hostpoolName'),'\"','')]",
+        "vmTemplateName": "[concat( if(variables('rdshManagedDisks'), 'managedDisks', 'unmanagedDisks'), '-', toLower(replace(parameters('vmImageType'),' ', '')), 'vm')]",
+        "vmTemplateUri": "[concat(variables('nestedTemplatesLocation'), variables('vmTemplateName'),'.json')]",
+        "appGroupName": "[concat(variables('hostpoolName'),'-DAG')]",
+        "appGroupResourceId": "[createArray(resourceId('Microsoft.DesktopVirtualization/applicationgroups/', variables('appGroupName')))]",
+        "workspaceResourceGroup": "[if(empty(parameters('workspaceResourceGroup')), resourceGroup().name, parameters('workspaceResourceGroup'))]",
+        //"applicationGroupReferencesArr": "[if(equals('',variables('allApplicationGroupReferences')), variables('appGroupResourceId'), concat(split(variables('allApplicationGroupReferences'),','), variables('appGroupResourceId')))]",
+        "applicationGroupReferencesArr": "[if(equals('',variables('allApplicationGroupReferences')), variables('appGroupResourceId'), concat(split(variables('allApplicationGroupReferences'),','), variables('appGroupResourceId')))]",
+        "hostpoolRequiredProps": {
+            "friendlyName": "[variables('hostpoolFriendlyName')]",
+            "description": "[variables('hostpoolDescription')]",
+            "hostpoolType": "[parameters('hostpoolType')]",
+            "personalDesktopAssignmentType": "[parameters('personalDesktopAssignmentType')]",
+            "maxSessionLimit": "[parameters('maxSessionLimit')]",
+            "loadBalancerType": "[parameters('loadBalancerType')]",
+            "validationEnvironment": "[parameters('validationEnvironment')]",
+            "preferredAppGroupType": "[variables('preferredAppGroupType')]",
+            "ring": null,
+            "registrationInfo": {
+                "expirationTime": "[parameters('tokenExpirationTime')]",
+                "token": null,
+                "registrationTokenOperation": "Update"
+            },
+            "vmTemplate": "[variables('vmTemp')]"
+        },
+        "hostpoolOptionalProps": {
+            "customRdpProperty": "[variables('customRdpProperty')]"
+        },
+        "sendLogsToStorageAccount": "[not(empty(variables('hostpoolDiagnosticSettingsStorageAccount')))]",
+        "sendLogsToLogAnalytics": "[not(empty(variables('hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId')))]",
+        "sendLogsToEventHub": "[not(empty(parameters('hostpoolDiagnosticSettingsEventHubName')))]",
+        "storageAccountIdProperty": "[if(variables('sendLogsToStorageAccount'), variables('hostpoolDiagnosticSettingsStorageAccount'), null())]",
+        "copy": [
+            {
+                "name": "hostpoolDiagnosticSettingsLogProperties",
+                "count": "[length(variables('hostpoolDiagnosticSettingsLogCategories'))]",
+                "input": {
+                    "category": "[variables('hostpoolDiagnosticSettingsLogCategories')[copyIndex('hostpoolDiagnosticSettingsLogProperties')]]",
+                    "enabled": true,
+                    "retentionPolicy": {
+                        "enabled": true,
+                        "days": 30
+                    }
+                }
+            },
+            {
+                "name": "appGroupDiagnosticSettingsLogProperties",
+                "count": "[length(variables('appGroupDiagnosticSettingsLogCategories'))]",
+                "input": {
+                    "category": "[variables('appGroupDiagnosticSettingsLogCategories')[copyIndex('appGroupDiagnosticSettingsLogProperties')]]",
+                    "enabled": true,
+                    "retentionPolicy": {
+                        "enabled": true,
+                        "days": 30
+                    }
+                }
+            },
+            {
+                "name": "workspaceDiagnosticSettingsLogProperties",
+                "count": "[length(variables('workspaceDiagnosticSettingsLogCategories'))]",
+                "input": {
+                    "category": "[variables('workspaceDiagnosticSettingsLogCategories')[copyIndex('workspaceDiagnosticSettingsLogProperties')]]",
+                    "enabled": true,
+                    "retentionPolicy": {
+                        "enabled": true,
+                        "days": 30
+                    }
+                }
+            }
+        ],
+
+        "ssh": {
+            "name": "SSH",
+            "properties": {
+                "access": "Allow",
+                "destinationAddressPrefix": "*",
+                "destinationPortRange": "22",
+                "sourceAddressPrefix": "*",
+                "sourcePortRange": "*",
+                "protocol": "Tcp",
+                "priority": 300,
+                "direction": "Inbound"
+            }
+        },
+        "RDP": {
+            "name": "RDP",
+            "properties": {
+                "access": "Allow",
+                "destinationAddressPrefix": "*",
+                "destinationPortRange": "3389",
+                "sourceAddressPrefix": "*",
+                "sourcePortRange": "*",
+                "protocol": "Tcp",
+                "priority": 320,
+                "direction": "Inbound"
+            }
+        },
+        "HTTPS": {
+            "name": "HTTPS",
+            "properties": {
+                "access": "Allow",
+                "destinationAddressPrefix": "*",
+                "destinationPortRange": "443",
+                "sourceAddressPrefix": "*",
+                "sourcePortRange": "*",
+                "protocol": "Tcp",
+                "priority": 340,
+                "direction": "Inbound"
+            }
+        },
+        "HTTP": {
+            "name": "HTTP",
+            "properties": {
+                "access": "Allow",
+                "destinationAddressPrefix": "*",
+                "destinationPortRange": "80",
+                "sourceAddressPrefix": "*",
+                "sourcePortRange": "*",
+                "protocol": "Tcp",
+                "priority": 360,
+                "direction": "Inbound"
+            }
+        },
+
+        "networkSecurityGroupRules": [
+
+            "[if(equals(parameters('nsgRulesName'),'RDP'),variables('RDP'),'')]",
+            "[if(equals(parameters('nsgRulesName'),'SSH'),variables('ssh'),'')]",
+            "[if(equals(parameters('nsgRulesName'),'HTTP'),variables('HTTP'),'')]",
+            "[if(equals(parameters('nsgRulesName'),'HTTPS'),variables('HTTPS'),'')]"
+
+
+        ]
+
+
+
+    },
+    "resources": [
+        //for Hostpool
+        {
+            "name": "[parameters('hostpoolName')]",
+            "apiVersion": "[variables('apiVersion')]",
+            "type": "Microsoft.DesktopVirtualization/hostpools",
+            "location": "[resourceGroup().location]",
+            "tags": "[parameters('tags')]",
+            "properties": "[if(empty(variables('customRdpProperty')), variables('hostpoolRequiredProps'), union(variables('hostpoolOptionalProps'), variables('hostpoolRequiredProps') ))]"
+        },
+        //for applicationGroup
+        {
+            "name": "[variables('appGroupName')]",
+            "apiVersion": "[variables('apiVersion')]",
+            "type": "Microsoft.DesktopVirtualization/applicationgroups",
+            "location": "[resourceGroup().location]",
+            "tags": "[parameters('tags')]",
+            "properties": {
+                "hostpoolarmpath": "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]",
+                "friendlyName": "Default Desktop",
+                "description": "Desktop Application Group created through the Hostpool Wizard",
+                "applicationGroupType": "Desktop"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+            ]
+        },
+
+        //for workspace
+        {
+            "apiVersion": "2018-05-01",
+            "name": "[concat('Workspace-linkedTemplate-', parameters('deploymentId'))]",
+            "type": "Microsoft.Resources/deployments",
+            "resourceGroup": "[variables('workspaceResourceGroup')]",
+            "condition": "[parameters('addToWorkspace')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "apiVersion": "[variables('apiVersion')]",
+                            "name": "[parameters('workSpaceName')]",
+                            "type": "Microsoft.DesktopVirtualization/workspaces",
+                            "location": "[resourceGroup().location]",
+                            "properties": {
+                                "applicationGroupReferences": "[variables('applicationGroupReferencesArr')]"
+                            }
+                        }
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/applicationgroups/', variables('appGroupName'))]"
+            ]
+        },
+
+        //for availabilityset of vm
+        {
+            "apiVersion": "2018-05-01",
+            "name": "[concat('AVSet-linkedTemplate-', parameters('deploymentId'))]",
+            "type": "Microsoft.Resources/deployments",
+            "resourceGroup": "[resourceGroup().location]",
+            "condition": "[and(variables('createVMs'), equals(parameters('availabilityOption'), 'AvailabilitySet'), parameters('createAvailabilitySet'))]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "resources": [
+                        {
+                            "apiVersion": "2018-10-01",
+                            "type": "Microsoft.Compute/availabilitySets",
+                            "name": "[parameters('availabilitySetName')]",
+                            "location": "[resourceGroup().location]",
+                            "tags": "[parameters('tags')]",
+                            "properties": {
+                                "platformUpdateDomainCount": "[parameters('availabilitySetUpdateDomainCount')]",
+                                "platformFaultDomainCount": "[parameters('availabilitySetFaultDomainCount')]"
+                            },
+                            "sku": {
+                                "name": "[variables('avSetSKU')]"
+                            }
+                        }
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/applicationgroups', variables('appGroupName'))]"
+            ]
+        },
+
+        //for  creation of VM
+        {
+            "apiVersion": "2018-05-01",
+            "name": "[concat('vmCreation-linkedTemplate-', parameters('deploymentId'))]",
+            "type": "Microsoft.Resources/deployments",
+            "condition": "[variables('createVMs')]",
+            "resourceGroup": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('AVSet-linkedTemplate-', parameters('deploymentId'))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('vmTemplateUri')]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "artifactsLocation": {
+                        "value": "[variables('artifactsLocation')]"
+                    },
+                    "availabilityOption": {
+                        "value": "[parameters('availabilityOption')]"
+                    },
+                    "availabilitySetName": {
+                        "value": "[parameters('availabilitySetName')]"
+                    },
+                    "availabilityZone": {
+                        "value": "[parameters('availabilityZone')]"
+                    },
+                    "vmImageVhdUri": {
+                        "value": "[parameters('vmImageVhdUri')]"
+                    },
+                    "storageAccountResourceGroupName": {
+                        "value": "[parameters('storageAccountResourceGroupName')]"
+                    },
+                    "vmGalleryImageOffer": {
+                        "value": "[parameters('vmImageReference').offer]"
+                    },
+                    "vmGalleryImagePublisher": {
+                        "value": "[parameters('vmImageReference').publisher]"
+                    },
+                    "vmGalleryImageHasPlan": {
+                        "value": "[parameters('vmGalleryImageHasPlan')]"
+                    },
+                    "vmGalleryImageSKU": {
+                        "value": "[parameters('vmImageReference').sku]"
+                    },
+                    "rdshPrefix": {
+                        "value": "[variables('rdshPrefix')]"
+                    },
+                    "rdshNumberOfInstances": {
+                        "value": "[parameters('vmNumberOfInstances')]"
+                    },
+                    "rdshVMDiskType": {
+                        "value": "[parameters('vmDiskType')]"
+                    },
+                    "rdshVmSize": {
+                        "value": "[parameters('vmSize')]"
+                    },
+                    "enableAcceleratedNetworking": {
+                        "value": false
+                    },
+                    "vmAdministratorAccountUsername": {
+                        "value": "[parameters('vmAdministratorAccountUsername')]"
+                    },
+                    "vmAdministratorAccountPassword": {
+                        "value": "[parameters('vmAdministratorAccountPassword')]"
+                    },
+                    "administratorAccountUsername": {
+                        "value": "[parameters('administratorAccountUsername')]"
+                    },
+                    "administratorAccountPassword": {
+                        "value": "[parameters('administratorAccountPassword')]"
+                    },
+                    "subnet-id": {
+                        "value": "[variables('subnet-id')]"
+                    },
+                    "vhds": {
+                        "value": "[variables('vhds')]"
+                    },
+                    "rdshImageSourceId": {
+                        "value": "[parameters('vmCustomImageSourceId')]"
+                    },
+                    "location": {
+                        "value": "[resourceGroup().location]"
+                    },
+                    "createNetworkSecurityGroup": {
+                        "value": "[parameters('createNetworkSecurityGroup')]"
+                    },
+                    "networkSecurityGroupId": {
+                        "value": "[variables('networkSecurityGroupId')]"
+                    },
+                    "networkSecurityGroupRules": {
+                        "value": "[variables('networkSecurityGroupRules')]"
+                    },
+                    "networkInterfaceTags": {
+                        "value": "[parameters('tags')]"
+                    },
+                    "networkSecurityGroupTags": {
+                        "value": "[parameters('tags')]"
+                    },
+                    "virtualMachineTags": {
+                        "value": "[parameters('tags')]"
+                    },
+                    "imageTags": {
+                        "value": "[parameters('tags')]"
+                    },
+                    "hostpoolToken": {
+                        "value": "[reference(parameters('hostpoolName')).registrationInfo.token]"
+                    },
+                    "hostpoolName": {
+                        "value": "[parameters('hostpoolName')]"
+                    },
+                    "domain": {
+                        "value": "[parameters('domain')]"
+                    },
+                    "ouPath": {
+                        "value": "[parameters('ouPath')]"
+                    },
+                    "aadJoin": {
+                        "value": "[parameters('aadJoin')]"
+                    },
+                    "intune": {
+                        "value": "[parameters('intune')]"
+                    },
+                    "bootDiagnostics": {
+                        "value": "[parameters('bootDiagnostics')]"
+                    },
+                    "_guidValue": {
+                        "value": "[parameters('deploymentId')]"
+                    },
+                    "userAssignedIdentity": {
+                        "value": "[variables('userAssignedIdentity')]"
+                    },
+                    "customConfigurationTemplateUrl": {
+                        "value": "[parameters('customConfigurationTemplateUrl')]"
+                    },
+                    "customConfigurationParameterUrl": {
+                        "value": "[parameters('customConfigurationParameterUrl')]"
+                    }
+                }
+            }
+        },
+        //for hostpool diagonstic Settings
+        {
+            "type": "Microsoft.DesktopVirtualization/hostpools/providers/diagnosticSettings",
+            "apiVersion": "2017-05-01-preview",
+            "condition": "[or(variables('sendLogsToEventHub'),variables('sendLogsToLogAnalytics'), variables('sendLogsToStorageAccount'))]",
+            "location": "[resourceGroup().location]",
+            "name": "[concat(parameters('hostpoolName'), '/Microsoft.Insights/', 'diagnosticSetting')]",
+            "properties": {
+                "storageAccountId": "[if(variables('sendLogsToStorageAccount'), variables('storageAccountIdProperty'), null())]",
+                "eventHubAuthorizationRuleId": "[if(variables('sendLogsToEventHub'), variables('hostpoolDiagnosticSettingsEventHubAuthorizationId'), null())]",
+                "eventHubName": "[if(variables('sendLogsToEventHub'), parameters('hostpoolDiagnosticSettingsEventHubName'), null())]",
+                "workspaceId": "[if(variables('sendLogsToLogAnalytics'), variables('hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId'), null())]",
+                "logs": "[variables('hostpoolDiagnosticSettingsLogProperties')]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/hostpools/', parameters('hostpoolName'))]"
+            ]
+        },
+
+        //for application diagnostic
+        {
+            "type": "Microsoft.DesktopVirtualization/applicationgroups/providers/diagnosticSettings",
+            "apiVersion": "2017-05-01-preview",
+            "condition": "[or(variables('sendLogsToEventHub'),variables('sendLogsToLogAnalytics'), variables('sendLogsToStorageAccount'))]",
+            "location": "[resourceGroup().location]",
+            "name": "[concat(variables('appGroupName'), '/Microsoft.Insights/', 'diagnosticSetting')]",
+            "properties": {
+                "storageAccountId": "[if(variables('sendLogsToStorageAccount'), variables('storageAccountIdProperty'), null())]",
+                "eventHubAuthorizationRuleId": "[if(variables('sendLogsToEventHub'), variables('hostpoolDiagnosticSettingsEventHubAuthorizationId'), null())]",
+                "eventHubName": "[if(variables('sendLogsToEventHub'), parameters('hostpoolDiagnosticSettingsEventHubName'), null())]",
+                "workspaceId": "[if(variables('sendLogsToLogAnalytics'), variables('hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId'), null())]",
+                "logs": "[variables('appGroupDiagnosticSettingsLogProperties')]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.DesktopVirtualization/applicationgroups/', variables('appGroupName'))]"
+            ]
+        },
+
+        //for workspace diagonstic location
+        {
+            "type": "Microsoft.DesktopVirtualization/workspaces/providers/diagnosticSettings",
+            "apiVersion": "2017-05-01-preview",
+            "condition": "[and(parameters('isNewWorkspace'),or(variables('sendLogsToEventHub'),variables('sendLogsToLogAnalytics'), variables('sendLogsToStorageAccount')))]",
+            "location": "[resourceGroup().location]",
+            "name": "[concat(if(parameters('isNewWorkspace'), parameters('workSpaceName'), 'placeholder'), '/Microsoft.Insights/', 'diagnosticSetting')]",
+            "properties": {
+                "storageAccountId": "[if(variables('sendLogsToStorageAccount'), variables('storageAccountIdProperty'), null())]",
+                "eventHubAuthorizationRuleId": "[if(variables('sendLogsToEventHub'), variables('hostpoolDiagnosticSettingsEventHubAuthorizationId'), null())]",
+                "eventHubName": "[if(variables('sendLogsToEventHub'), parameters('hostpoolDiagnosticSettingsEventHubName'), null())]",
+                "workspaceId": "[if(variables('sendLogsToLogAnalytics'), variables('hostpoolDiagnosticSettingsLogAnalyticsWorkspaceId'), null())]",
+                "logs": "[variables('workspaceDiagnosticSettingsLogProperties')]"
+            },
+            "dependsOn": [
+                "[concat('Workspace-linkedTemplate-', parameters('deploymentId'))]"
+            ]
+        }
+    ]
+
+}
