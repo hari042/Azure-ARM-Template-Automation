@@ -1,0 +1,202 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {},
+    "functions": [],
+    "variables": {
+        "vNetHubPrefix": "10.0.0.0/16",
+        "subnetBastionName": "AzureBastionSubnet",
+        "subnetBastionPrefix": "10.0.0.0/27",
+        "vNetSpokePrefix": "10.1.0.0/16",
+        "subnetSpokeName": "Subnet-1",
+        "subnetSpokePrefix": "10.1.0.0/24",
+        "bastionPublicIPName": "pip-bastion-01",
+        "vmPublicIPName": "pipserver-1",
+        "nsgName": "nsg-subnet-1"
+    },
+    "resources": [
+        {
+            "name": "hub-1",
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2020-05-01",
+            "location": "east us",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('vNetHubPrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('subnetBastionName')]",
+                        "properties": {
+                            "addressPrefix": "[variables('subnetBastionPrefix')]"
+                        }
+
+                    }
+                ]
+            }
+        },
+        {
+            "name": "spoke-1",
+            "type": "Microsoft.Network/virtualNetworks",
+            "apiVersion": "2020-05-01",
+            "location": "east us",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('vNetSpokePrefix')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "[variables('subnetSpokeName')]",
+                        "properties": {
+                            "addressPrefix": "[variables('subnetSpokePrefix')]"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[concat(parameters('vNetHubName'),'/peering-to-',parameters('vNetSpokeName'))]",
+            "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+            "apiVersion": "2020-05-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks',parameters('vNetHubName'))",
+                "[resourceId('Microsoft.Network/virtualNetworks',parameters('vNetSpokeName'))"
+            ],
+            "properties": {
+                "allowVirtualNetworkAccess": true,
+                "allowForwardedTraffic": false,
+                "allowGatewayTransit": false,
+                "useRemoteGateways": false,
+                "remoteVirtualNetwork": {
+                    "id": "[resourceId('Microsoft.Network/virtualNetworks','spoke-1')]"
+                }
+            }
+        },
+        {
+            "name": "spoke-1/peering-to-hub-1",
+            "type": "Microsoft.Network/virtualNetworks/virtualNetworkPeerings",
+            "apiVersion": "2020-05-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks','hub-1')]",
+                "[resourceId('Microsoft.Network/virtualNetworks','spoke-1')]"
+            ],
+            "properties": {
+                "allowVirtualNetworkAccess": true,
+                "allowForwardedTraffic": false,
+                "allowGatewayTransit": false,
+                "useRemoteGateways": false,
+                "remoteVirtualNetwork": {
+                    "id": "[resourceId('Microsoft.Network/virtualNetworks','hub-1')]"
+                }
+            }
+        },
+        {
+            "name": "[variables('nsgName')]",
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "apiVersion": "2020-05-01",
+            "location": "east us",
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "Allow-Inbound-HTTPS",
+                        "properties": {
+                            "description": "Allows inbound traffic for HTTPS",
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "443",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 100,
+                            "direction": "Inbound"
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "name": "[variables('bastionPublicIPName')]",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2020-05-01",
+            "location": "east us",
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            },
+            "sku": {
+                "name": "Standard"
+            }
+        },
+        {
+            "name": "[variables('vmPublicIPName')]",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2020-05-01",
+            "location": "east us",
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            },
+            "sku": {
+                "name": "Standard"
+            }
+        },
+        {
+            "name": "bastonhost-1",
+            "type": "Microsoft.Network/bastionHosts",
+            "apiVersion": "2020-05-01",
+            "location": "east us",
+            "dependsOn": [ "[resourceId('Microsoft.Network/publicIPAddresses', variables('bastionPublicIPName'))]" ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "properties": {
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets','hub-1',variables('subnetBastionName'))]"
+                            },
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('bastionPublicIPName'))]"
+                            },
+                            "privateIPAllocationMethod": "Dynamic"
+                        },
+                        "name": "ipconfig1"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "spoke-nic",
+            "type": "Microsoft.Network/networkInterfaces",
+            "apiVersion": "2020-05-01",
+            "location": "east us",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks','spoke-1')]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups',variables('nsgName'))]",
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('vmPublicIPName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets','spoke-1',variables('subnetSpokeName'))]"
+                            },
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('vmPublicIPName'))]"
+                            }
+                        }
+                    }
+                ],
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups',variables('nsgName'))]"
+                }
+            }
+        }
+        
+        
+    ],
+    "outputs": {}
+}
