@@ -1,0 +1,285 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "azureFirewallName": {
+            "type": "string",
+            "defaultValue": "Firewall-1"
+        },
+        "zone": {
+            "type": "array",
+            "defaultValue": [] // values can be [],"1", "2", "3"
+
+        },
+        "azureFirewallTier": {
+            "type": "string",
+            "defaultValue": "Standard" // Standard, Premium
+        },
+        "firewallManagement": {
+            "type": "string",
+            "defaultValue": "policy" // values can be  policy ,rule   //if user select  rule ,then policy should not be taken
+        },
+
+
+        "newPolicy": {
+            "type": "bool",
+            "defaultValue": true //false if user don't want to create new policy
+        },
+        "policyResourceGroup": {
+            "type": "string",
+            "defaultValue": "RG-pool" //If newPolicy  is true then policyResourceGroup  value should be same as firewalldeployment ResourceGroup().Name
+        }, 
+        "policType": {
+            "type": "string",
+            "defaultValue": "Standard" //Premium
+        },
+        "policyName": {
+            "type": "string",
+            "defaultValue": "policy-12"
+        },
+
+        //parameter's for creating Vnet
+        "newVnet": {
+            "type": "bool",
+            "defaultValue": true //it will be false when user select existing vnet
+        },
+        "vnetName": {
+            "type": "string",
+            "defaultValue": "Net-firewall-2"  
+        },
+        "vnetAddressSpace": {
+            "type": "string",
+            "defaultValue": "10.0.0.0/16"  //if  user select existing vnet, then don't take user input for vnetAddressSpace
+        },
+        "newSubnet": {
+            "type": "bool",
+            "defaultValue": false // it will be true when the user wants to update the existing vnetSubnet(only if AzureFirewallSubnet is not there in the existing vnet)
+        },
+         "azureFirewallSubnet": {
+            "type": "string",
+            "defaultValue": "AzureFirewallSubnet" //don't take user input for this,(display this to user only if newVnet is true or newSubnet is true )
+        },
+        "subnetAddressSpace": {
+            "type": "string",
+            "defaultValue": "10.0.1.0/24" //if  user select existing vnet and newSubnet value is false , then don't take user input for subnetAddressSpace
+
+        },
+        "newPublicIp": {
+            "type": "bool",
+            "defaultValue": true // false if user want to select existing publicIP
+        },
+        "publicIpResourceGroup": {
+            "type": "string",
+            "defaultValue": "RG-pool" //If newPublicIp  is true ,then publicIpResourceGroup  value should be same as firewalldeployment ResourceGroup().Name
+        }, 
+
+        "publicIpAddressName": {
+            "type": "string",
+            "defaultValue": "public-ip-1" //value can be 'none'  only if the user enables tunneling.
+        },
+
+        //only in case of tunneling
+        "tunnelingRequired": {
+            "type": "bool",
+            "defaultValue": false //true if user want to enable  tunnelling
+        },
+        "newTunnelingRequired": {
+            "type": "bool",
+            "defaultValue": false //true if user  wants to  create new AzureFirewallManagementSubnet (if tunnelingRequired value is false ,then don't take user input for this)
+        },
+        "azureFirewallManagementSubnet": {
+            "type": "string",
+            "defaultValue": "AzureFirewallManagementSubnet" //don't take user input for this,(display this to user only if newTunnelingRequired is true )
+        },
+        "tunnelingSubnetAddressSpace": {
+            "type": "string",
+            "defaultValue": "10.0.2.0/24" //if tunnelingRequired is false,then  don't take user input for this.
+        },
+        "newManagementIp": {
+            "type": "bool",
+            "defaultValue": false //true if user want to create a new publicIP for  management publicIp (if tunnelingRequired value is false ,then don't take user input for this)
+        
+        },
+        "managmentIpResourceGroup": {
+            "type": "string",
+            "defaultValue": "RG-pool" //If newPublicIp  is true ,then managmentIpResourceGroup  value should be same as firewalldeployment ResourceGroup().Name (if tunnelingRequired value is false ,then don't take user input for this)
+        }, 
+        "managementPublicIpAddressName": {
+            "type": "string",
+            "defaultValue": "mngip-2" //(if tunnelingRequired value is false ,then don't take user input for this)
+        },
+        "tags": {
+            "type": "object",
+            "defaultValue": {}
+        }
+    },
+    "variables": {
+        "managementPublicIpAddressId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourcegroups/',parameters('managmentIpResourceGroup'),'/providers/Microsoft.Network/publicIPAddresses/',parameters('managementPublicIpAddressName'))]",
+        "managementSubnetId": "[concat('/subscriptions/',subscription().subscriptionId,'/resourcegroups/',resourceGroup().name,'/providers/Microsoft.Network/virtualNetworks/',parameters('vnetName'),'/subnets/AzureFirewallManagementSubnet')]",
+
+
+        //For TunnelingManagmentConfiguration
+        "management": {
+            "name": "[if(parameters('tunnelingRequired'),parameters('managementPublicIpAddressName'),json('null'))]",
+            "properties": {
+                "subnet": {
+                    "id": "[if(parameters('tunnelingRequired'),variables('managementSubnetId'),json('null'))]"
+                },
+                "publicIPAddress": {
+                    "id": "[if(parameters('tunnelingRequired'),variables('managementPublicIpAddressId'),json('null'))]"
+                }
+            }
+        },
+        //forpublicIpConfiguration
+        "publicConfig": {
+            "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourcegroups/',parameters('publicIpResourceGroup'),'/providers/Microsoft.Network/publicIPAddresses/', parameters('publicIpAddressName'))]"
+        },
+
+        //for policyConfiguration
+        "policyConfig": {
+            "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourcegroups/',parameters('policyResourceGroup'),'/providers/Microsoft.Network/firewallPolicies/',parameters('policyName'))]"
+        }
+
+    },
+    "resources": [
+
+
+        //For Creating new publicIP Address.
+        {
+
+            "condition": "[parameters('newPublicIp')]",
+            "apiVersion": "2017-08-01",
+            "type": "Microsoft.Network/publicIpAddresses",
+            "name": "[parameters('publicIpAddressName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard"
+            },
+            "zones": "[parameters('zone')]",
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            },
+            "tags": "[parameters('tags')]"
+        },
+
+        //Creating new publicIP for ManagementPublicIP (only if tunneling enabled)
+        {
+            "condition": "[and(parameters('tunnelingRequired'),parameters('newManagementIp'))]",
+            "apiVersion": "2017-08-01",
+            "type": "Microsoft.Network/publicIpAddresses",
+            "name": "[parameters('managementPublicIpAddressName')]",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard"
+            },
+            "zones": "[parameters('zone')]",
+            "properties": {
+                "publicIPAllocationMethod": "Static"
+            },
+            "tags": "[parameters('tags')]"
+        },
+
+        //For Creating new vnet.
+        {
+            "condition": "[parameters('newVnet')]",
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[parameters('vnetName')]",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2019-09-01",
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[parameters('vnetAddressSpace')]"
+                    ]
+                },
+                "subnets": [
+                    {
+                        "name": "AzureFirewallSubnet",
+                        "properties": {
+                            "addressPrefix": "[parameters('subnetAddressSpace')]"
+                        }
+                    }
+                ]
+            },
+            "tags": "[parameters('tags')]"
+        },
+
+        //For Creating  new AzureFirewallManagement Subnet
+        {
+            "condition": "[parameters('newTunnelingRequired')]",
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2020-05-01",
+            "name": "[concat(parameters('vnetName'),'/',parameters('azureFirewallManagementSubnet'))]",
+            "properties": {
+                "addressPrefix": "[parameters('tunnelingSubnetAddressSpace')]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]"
+            ]
+
+        },
+
+       // for updating the existing vnetSubnet, if it does not have AzureFirewall subnet
+        {
+            "condition": "[parameters('newSubnet')]",
+            "type": "Microsoft.Network/virtualNetworks/subnets",
+            "apiVersion": "2020-05-01",
+            "name": "[concat(parameters('vnetName'),'/',parameters('azureFirewallSubnet'))]",
+            "properties": {
+                "addressPrefix": "[parameters('subnetAddressSpace')]"
+            }
+        },
+        //creating new policy
+        {
+            "condition": "[parameters('newPolicy')]",
+            "apiVersion": "2019-06-01",
+            "type": "Microsoft.Network/firewallPolicies",
+            "resources": [],
+            "properties": {
+                "sku": {
+                    "tier": "[parameters('policType')]"
+                }
+            },
+            "name": "[parameters('policyName')]",
+            "location": "[resourceGroup().location]",
+            "tags": "[parameters('tags')]"
+        },
+
+        //creating  AzureFirewalll
+        {
+            "apiVersion": "2020-05-01",
+            "type": "Microsoft.Network/azureFirewalls",
+            "name": "[parameters('azureFirewallName')]",
+            "location": "[resourceGroup().location]",
+            "zones": "[parameters('zone')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('azureFirewallSubnet'))]",
+                "[resourceId('Microsoft.Network/publicIpAddresses', parameters('publicIpAddressName'))]",
+                "[resourceId('Microsoft.Network/firewallPolicies', parameters('policyName'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('azureFirewallManagementSubnet'))]",
+                "[resourceId('Microsoft.Network/publicIpAddresses', parameters('managementPublicIpAddressName'))]"
+            ],
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "[parameters('publicIpAddressName')]",
+                        "properties": {
+                            "subnet": {
+                                "id": "[concat('/subscriptions/',subscription().subscriptionId,'/resourcegroups/',resourceGroup().name,'/providers/Microsoft.Network/virtualNetworks/', parameters('vnetName'),'/subnets/AzureFirewallSubnet')]"
+                            },
+                            "publicIpAddress": "[if(equals(parameters('publicIpAddressName'),'none'),json('null'),variables('publicConfig'))]"
+                        }
+                    }
+                ],
+                "sku": {
+                    "tier": "[parameters('azureFirewallTier')]"
+                },
+
+                "managementIpConfiguration": "[if(parameters('tunnelingRequired'),variables('management'),json('null'))]",
+                "firewallPolicy": "[if(equals(parameters('firewallManagement'),'policy'),variables('policyConfig'),json('null'))]"
+            },
+            "tags": "[parameters('tags')]"
+        }
+    ]
+}
